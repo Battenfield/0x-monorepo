@@ -10,6 +10,7 @@ contract MixinForwarderQuote is MixinForwarderCore {
         uint256 takerTokenFillAmount,
         bytes signature)
         public
+        view
         returns (FillResults memory fillResults)
     {
         // Compute the order hash

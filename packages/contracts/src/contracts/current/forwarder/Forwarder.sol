@@ -31,7 +31,7 @@ contract Forwarder is
         zrxToken.approve(address(tokenProxy), MAX_UINT);
     }
 
-    function fillOrders(
+    function buyTokens(
         Order[] orders,
         bytes[] signatures,
         Order[] feeOrders,
@@ -44,12 +44,12 @@ contract Forwarder is
         require(orders[0].takerTokenAddress == address(etherToken));
 
         etherToken.deposit.value(msg.value)();
-        FillResults memory fillTokensFillResult = fillTokenOrders(orders, signatures, feeOrders, feeSignatures, msg.value);
+        FillResults memory fillTokensFillResult = marketBuyTokens(orders, signatures, feeOrders, feeSignatures, msg.value);
         addFillResults(totalFillResult, fillTokensFillResult);
         return totalFillResult;
     }
 
-    function fillOrdersFee(
+    function buyTokensFee(
         Order[] orders,
         bytes[] signatures,
         Order[] feeOrders,
@@ -74,13 +74,13 @@ contract Forwarder is
         }
 
         etherToken.deposit.value(remainingEthAmount)();
-        FillResults memory fillTokensFillResult = fillTokenOrders(orders, signatures, feeOrders, feeSignatures, remainingEthAmount);
+        FillResults memory fillTokensFillResult = marketBuyTokens(orders, signatures, feeOrders, feeSignatures, remainingEthAmount);
         addFillResults(totalFillResult, fillTokensFillResult);
         return totalFillResult;
     }
 
 
-    function fillTokenOrders(
+    function marketBuyTokens(
         Order[] orders,
         bytes[] signatures,
         Order[] feeOrders,
@@ -98,7 +98,7 @@ contract Forwarder is
             // Fees are required for these orders
             // Buy enough ZRX to cover the future market sell
             FillResults memory feeTokensResult =
-                fillTokenFeeAbstraction(feeOrders, feeSignatures, tokensSellQuote.takerFeePaid);
+                buyFeeTokens(feeOrders, feeSignatures, tokensSellQuote.takerFeePaid);
             takerTokenBalance = safeSub(takerTokenBalance, feeTokensResult.takerTokenFilledAmount);
             totalFillResult.takerFeePaid = feeTokensResult.takerFeePaid;
         }
@@ -108,13 +108,45 @@ contract Forwarder is
         // Ensure the token abstraction was fair 
         require(isAcceptableThreshold(sellTokenAmount, requestedTokensResult.takerTokenFilledAmount));
         // Update our return FillResult with the market sell
-        addFillResultsExchange(totalFillResult, requestedTokensResult);
+        addFillResults(totalFillResult, requestedTokensResult);
         // Transfer all tokens to msg.sender
         transferToken(orders[0].makerTokenAddress, msg.sender, totalFillResult.makerTokenFilledAmount);
         return totalFillResult;
     }
 
-    function fillTokenFeeAbstraction(
+    function marketBuyNFT(
+        Order[] orders,
+        bytes[] signatures,
+        Order[] feeOrders,
+        bytes[] feeSignatures,
+        uint256[] tokenIds)
+        private
+    {
+        uint256 totalFeeAmount;
+        for (uint256 i = 0; i < orders.length; i++) {
+            totalFeeAmount = safeAdd(totalFeeAmount, orders[i].takerFee);
+        }
+
+        if (totalFeeAmount > 0) {
+            // Fees are required for these orders
+            // Buy enough ZRX to cover the future fill
+            buyFeeTokens(feeOrders, feeSignatures, totalFeeAmount);
+        }
+
+        for (uint256 n = 0; n < orders.length; n++) {
+            FillResults memory fillOrderResults = exchange.fillOrder(
+                orders[n],
+                orders[n].takerTokenAmount,
+                signatures[n]
+            );
+            // Fail it it wasn't filled otherwise we will keep WETH
+            require(fillOrderResults.takerTokenFilledAmount == orders[n].takerTokenAmount);
+            // TODO read this through metadata
+            transferNFTToken(orders[n].makerTokenAddress, msg.sender, tokenIds[n]);
+        }
+    }
+
+    function buyFeeTokens(
         Order[] feeOrders,
         bytes[] feeSignatures,
         uint256 feeAmount)
@@ -123,13 +155,13 @@ contract Forwarder is
     {
         require(feeOrders[0].makerTokenAddress == address(zrxToken));
         // Quote the fees
-        FillResults memory feeQuote = marketBuyOrdersQuote(feeOrders, feeAmount, feeSignatures);
-        // Buy enough ZRX to cover the future market sell
-        Exchange.FillResults memory buyFillResult = exchange.marketBuyOrders(
+        FillResults memory marketBuyFeeQuote = marketBuyOrdersQuote(feeOrders, feeAmount, feeSignatures);
+        // Buy enough ZRX to cover the future market sell as well as this market buy
+        Exchange.FillResults memory marketBuyFillResult = exchange.marketBuyOrders(
             feeOrders,
-            safeAdd(feeAmount, feeQuote.takerFeePaid), // fees for fees
+            safeAdd(feeAmount, marketBuyFeeQuote.takerFeePaid), // fees for fees
             feeSignatures);
-        addFillResultsExchange(totalFillResult, buyFillResult);
+        addFillResults(totalFillResult, marketBuyFillResult);
         return totalFillResult;
     }
 
@@ -140,5 +172,13 @@ contract Forwarder is
         internal
     {
         require(IToken(token).transfer(account, amount));
+    }
+    function transferNFTToken(
+        address token,
+        address account,
+        uint tokenId)
+        internal
+    {
+        require(IToken(token).transfer(account, tokenId));
     }
 }

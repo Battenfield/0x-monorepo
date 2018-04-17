@@ -6,6 +6,7 @@ contract MixinERC721Receiver {
 
     function onERC721Received(address, uint256, bytes)
         public
+        pure
         returns(bytes4)
     {
         return ERC721_RECEIVED;

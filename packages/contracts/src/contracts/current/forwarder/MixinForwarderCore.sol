@@ -22,23 +22,14 @@ contract MixinForwarderCore is
     Token zrxToken;
 
     function isAcceptableThreshold(uint256 requestedTokenAmount, uint256 soldTokenAmount)
-        public
-        constant
+        internal
+        pure
         returns (bool)
     {
         uint256 exchangedProportion = safeDiv(safeMul(requestedTokenAmount, ALLOWABLE_EXCHANGE_PERCENTAGE), PERCENTAGE_DENOMINATOR);
         return soldTokenAmount >= exchangedProportion;
     }
     function addFillResults(FillResults memory totalFillResults, FillResults memory singleFillResults)
-        internal
-        pure
-    {
-        totalFillResults.makerTokenFilledAmount = safeAdd(totalFillResults.makerTokenFilledAmount, singleFillResults.makerTokenFilledAmount);
-        totalFillResults.takerTokenFilledAmount = safeAdd(totalFillResults.takerTokenFilledAmount, singleFillResults.takerTokenFilledAmount);
-        totalFillResults.makerFeePaid = safeAdd(totalFillResults.makerFeePaid, singleFillResults.makerFeePaid);
-        totalFillResults.takerFeePaid = safeAdd(totalFillResults.takerFeePaid, singleFillResults.takerFeePaid);
-    }
-    function addFillResultsExchange(FillResults memory totalFillResults, Exchange.FillResults memory singleFillResults)
         internal
         pure
     {
