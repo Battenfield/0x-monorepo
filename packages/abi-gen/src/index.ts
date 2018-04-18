@@ -45,6 +45,12 @@ const args = yargs
         demandOption: true,
         normalize: true,
     })
+    .option('version-name', {
+        describe: 'Which contract version to use',
+        type: 'string',
+        demandOption: true,
+        normalize: true,
+    })
     .option('backend', {
         describe: `The backing Ethereum library your app uses. Either 'web3' or 'ethers'. Ethers auto-converts small ints to numbers whereas Web3 doesn't.`,
         type: 'string',
@@ -57,7 +63,7 @@ const args = yargs
         default: DEFAULT_NETWORK_ID,
     })
     .example(
-        "$0 --abis 'src/artifacts/**/*.json' --out 'src/contracts/generated/' --partials 'src/templates/partials/**/*.handlebars' --template 'src/templates/contract.handlebars'",
+        "$0 --abis 'src/artifacts/**/*.json' --out 'src/contracts/generated/' --partials 'src/templates/partials/**/*.handlebars' --template 'src/templates/contract.handlebars' --version-name development",
         'Full usage example',
     ).argv;
 
@@ -108,8 +114,8 @@ for (const abiFileName of abiFileNames) {
         ABI = parsedContent; // ABI file
     } else if (!_.isUndefined(parsedContent.abi)) {
         ABI = parsedContent.abi; // Truffle artifact
-    } else if (!_.isUndefined(parsedContent.networks) && !_.isUndefined(parsedContent.networks[args.networkId])) {
-        ABI = parsedContent.networks[args.networkId].abi; // 0x contracts package artifact
+    } else if (!_.isUndefined(parsedContent.versions) && !_.isUndefined(parsedContent.versions[args.versionName])) {
+        ABI = parsedContent.versions[args.versionName].compilerOutput.abi; // 0x artifact
     }
     if (_.isUndefined(ABI)) {
         logUtils.log(`${chalk.red(`ABI not found in ${abiFileName}.`)}`);

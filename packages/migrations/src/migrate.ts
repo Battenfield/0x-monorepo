@@ -9,6 +9,7 @@ import { runMigrationsAsync } from './migration';
 (async () => {
     const deployerOpts = {
         jsonrpcUrl: 'http://localhost:8545',
+        versionName: 'development',
         artifactsDir: path.resolve('src', 'artifacts'),
         networkId: 50,
         defaults: {

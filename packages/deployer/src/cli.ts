@@ -17,6 +17,7 @@ const DEFAULT_OPTIMIZER_ENABLED = false;
 const DEFAULT_CONTRACTS_DIR = path.resolve('src/contracts');
 const DEFAULT_ARTIFACTS_DIR = path.resolve('src/artifacts');
 const DEFAULT_NETWORK_ID = 50;
+const DEFAULT_VERSION = 'development';
 const DEFAULT_JSONRPC_URL = 'http://localhost:8545';
 const DEFAULT_GAS_PRICE = (10 ** 9 * 2).toString();
 const DEFAULT_CONTRACTS_LIST = '*';
@@ -28,8 +29,7 @@ const DEFAULT_CONTRACTS_LIST = '*';
 async function onCompileCommandAsync(argv: CliOptions): Promise<void> {
     const opts: CompilerOptions = {
         contractsDir: argv.contractsDir,
-        networkId: argv.networkId,
-        optimizerEnabled: argv.shouldOptimize,
+        versionName: argv.versionName,
         artifactsDir: argv.artifactsDir,
         specifiedContracts: getContractsSetFromList(argv.contracts),
     };
@@ -46,8 +46,7 @@ async function onDeployCommandAsync(argv: CliOptions): Promise<void> {
     const networkId = await web3Wrapper.getNetworkIdAsync();
     const compilerOpts: CompilerOptions = {
         contractsDir: argv.contractsDir,
-        networkId,
-        optimizerEnabled: argv.shouldOptimize,
+        versionName: argv.versionName,
         artifactsDir: argv.artifactsDir,
         specifiedContracts: getContractsSetFromList(argv.contracts),
     };
@@ -59,6 +58,7 @@ async function onDeployCommandAsync(argv: CliOptions): Promise<void> {
     };
     const deployerOpts: DeployerOptions = {
         artifactsDir: argv.artifactsDir,
+        versionName: argv.versionName,
         jsonrpcUrl: argv.jsonrpcUrl,
         networkId,
         defaults,
@@ -88,6 +88,11 @@ function getContractsSetFromList(contracts: string): Set<string> {
  */
 function deployCommandBuilder(yargsInstance: any) {
     return yargsInstance
+        .option('network-id', {
+            type: 'number',
+            default: DEFAULT_NETWORK_ID,
+            description: 'mainnet=1, kovan=42, testrpc=50',
+        })
         .option('contract', {
             type: 'string',
             description: 'name of contract to deploy, exluding .sol extension',
@@ -96,7 +101,40 @@ function deployCommandBuilder(yargsInstance: any) {
             type: 'string',
             description: 'comma separated list of constructor args to deploy contract with',
         })
-        .demandOption(['contract', 'args'])
+        .option('jsonrpc-url', {
+            type: 'string',
+            default: DEFAULT_JSONRPC_URL,
+            description: 'url of JSON RPC',
+        })
+        .option('account', {
+            type: 'string',
+            description: 'account to use for deploying contracts',
+        })
+        .option('gas-price', {
+            type: 'string',
+            default: DEFAULT_GAS_PRICE,
+            description: 'gasPrice to be used for transactions',
+        })
+        .demandOption(['contract', 'args', 'account'])
+        .help().argv;
+}
+
+/**
+ * Provides extra required options for compile command.
+ * @param yargsInstance yargs instance provided in builder function callback.
+ */
+function compileCommandBuilder(yargsInstance: any) {
+    return yargsInstance
+        .option('should-optimize', {
+            type: 'boolean',
+            default: DEFAULT_OPTIMIZER_ENABLED,
+            description: 'enable optimizer',
+        })
+        .option('contracts', {
+            type: 'string',
+            default: DEFAULT_CONTRACTS_LIST,
+            description: 'comma separated list of contracts to compile',
+        })
         .help().argv;
 }
 
@@ -108,41 +146,17 @@ function deployCommandBuilder(yargsInstance: any) {
             default: DEFAULT_CONTRACTS_DIR,
             description: 'path of contracts directory to compile',
         })
-        .option('network-id', {
-            type: 'number',
-            default: DEFAULT_NETWORK_ID,
-            description: 'mainnet=1, kovan=42, testrpc=50',
-        })
-        .option('should-optimize', {
-            type: 'boolean',
-            default: DEFAULT_OPTIMIZER_ENABLED,
-            description: 'enable optimizer',
-        })
         .option('artifacts-dir', {
             type: 'string',
             default: DEFAULT_ARTIFACTS_DIR,
             description: 'path to write contracts artifacts to',
         })
-        .option('jsonrpc-url', {
+        .option('version-name', {
             type: 'string',
-            default: DEFAULT_JSONRPC_URL,
-            description: 'url of JSON RPC',
+            default: DEFAULT_VERSION,
+            description: 'name of the contract version',
         })
-        .option('gas-price', {
-            type: 'string',
-            default: DEFAULT_GAS_PRICE,
-            description: 'gasPrice to be used for transactions',
-        })
-        .option('account', {
-            type: 'string',
-            description: 'account to use for deploying contracts',
-        })
-        .option('contracts', {
-            type: 'string',
-            default: DEFAULT_CONTRACTS_LIST,
-            description: 'comma separated list of contracts to compile',
-        })
-        .command('compile', 'compile contracts', identityCommandBuilder, consoleReporter(onCompileCommandAsync))
+        .command('compile', 'compile contracts', compileCommandBuilder, consoleReporter(onCompileCommandAsync))
         .command(
             'deploy',
             'deploy a single contract with provided arguments',

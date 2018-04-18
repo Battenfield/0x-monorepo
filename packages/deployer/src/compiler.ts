@@ -38,11 +38,22 @@ import {
     ContractNetworks,
     ContractSourceData,
     ContractSpecificSourceData,
+    ContractVersion,
 } from './utils/types';
 import { utils } from './utils/utils';
 
 const ALL_CONTRACTS_IDENTIFIER = '*';
 const SOLC_BIN_DIR = path.join(__dirname, '..', '..', 'solc_bin');
+const DEFAULT_COMPILER_SETTINGS: solc.CompilerSettings = {
+    optimizer: {
+        enabled: false,
+    },
+    outputSelection: {
+        '*': {
+            '*': ['abi', 'evm.bytecode.object'],
+        },
+    },
+};
 
 /**
  * The Compiler facilitates compiling Solidity smart contracts and saves the results
@@ -52,8 +63,8 @@ export class Compiler {
     private _resolver: Resolver;
     private _nameResolver: NameResolver;
     private _contractsDir: string;
-    private _networkId: number;
-    private _optimizerEnabled: boolean;
+    private _versionName: string;
+    private _compilerSettings: solc.CompilerSettings;
     private _artifactsDir: string;
     private _specifiedContracts: Set<string> = new Set();
     /**
@@ -63,8 +74,8 @@ export class Compiler {
      */
     constructor(opts: CompilerOptions) {
         this._contractsDir = opts.contractsDir;
-        this._networkId = opts.networkId;
-        this._optimizerEnabled = opts.optimizerEnabled;
+        this._versionName = opts.versionName;
+        this._compilerSettings = opts.compilerSettings || DEFAULT_COMPILER_SETTINGS;
         this._artifactsDir = opts.artifactsDir;
         this._specifiedContracts = opts.specifiedContracts;
         this._nameResolver = new NameResolver(path.resolve(this._contractsDir));
@@ -109,9 +120,14 @@ export class Compiler {
             shouldCompile = true;
         } else {
             const currentArtifact = currentArtifactIfExists as ContractArtifact;
-            shouldCompile =
-                currentArtifact.networks[this._networkId].optimizer_enabled !== this._optimizerEnabled ||
-                currentArtifact.networks[this._networkId].source_tree_hash !== sourceTreeHashHex;
+            if (_.isUndefined(currentArtifact.versions) || _.isUndefined(currentArtifact.versions[this._versionName])) {
+                shouldCompile = true;
+            } else {
+                shouldCompile =
+                    currentArtifact.schemaVersion !== '2.0.0' ||
+                    !_.isEqual(currentArtifact.versions[this._versionName].compiler.settings, this._compilerSettings) ||
+                    currentArtifact.versions[this._versionName].sourceTreeHashHex !== sourceTreeHashHex;
+            }
         }
         if (!shouldCompile) {
             return;
@@ -147,22 +163,7 @@ export class Compiler {
                     urls: [`file://${absoluteFilePath}`],
                 },
             },
-            settings: {
-                optimizer: {
-                    enabled: this._optimizerEnabled,
-                },
-                outputSelection: {
-                    '*': {
-                        '*': [
-                            'abi',
-                            'evm.bytecode.object',
-                            'evm.bytecode.sourceMap',
-                            'evm.deployedBytecode.object',
-                            'evm.deployedBytecode.sourceMap',
-                        ],
-                    },
-                },
-            },
+            settings: this._compilerSettings,
         };
         const compiled: solc.StandardOutput = JSON.parse(
             solcInstance.compileStandardWrapper(JSON.stringify(standardInput), importPath => {
@@ -194,28 +195,15 @@ export class Compiler {
                 `Contract ${contractName} not found in ${absoluteFilePath}. Please make sure your contract has the same name as it's file name`,
             );
         }
-        const abi: ContractAbi = compiledData.abi;
-        const bytecode = `0x${compiledData.evm.bytecode.object}`;
-        const runtimeBytecode = `0x${compiledData.evm.deployedBytecode.object}`;
-        const sourceMap = compiledData.evm.bytecode.sourceMap;
-        const sourceMapRuntime = compiledData.evm.deployedBytecode.sourceMap;
-        const unresolvedSourcePaths = _.keys(compiled.sources);
-        const sources = _.map(
-            unresolvedSourcePaths,
-            unresolvedSourcePath => this._resolver.resolve(unresolvedSourcePath).path,
-        );
-        const updated_at = Date.now();
-        const contractNetworkData: ContractNetworkData = {
-            solc_version: solcVersion,
-            source_tree_hash: sourceTreeHashHex,
-            optimizer_enabled: this._optimizerEnabled,
-            abi,
-            bytecode,
-            runtime_bytecode: runtimeBytecode,
-            updated_at,
-            source_map: sourceMap,
-            source_map_runtime: sourceMapRuntime,
-            sources,
+        const contractVersion: ContractVersion = {
+            compilerOutput: compiledData,
+            sources: compiled.sources,
+            sourceTreeHashHex,
+            compiler: {
+                name: 'solc',
+                version: solcVersion,
+                settings: this._compilerSettings,
+            },
         };
 
         let newArtifact: ContractArtifact;
@@ -223,17 +211,19 @@ export class Compiler {
             const currentArtifact = currentArtifactIfExists as ContractArtifact;
             newArtifact = {
                 ...currentArtifact,
-                networks: {
-                    ...currentArtifact.networks,
-                    [this._networkId]: contractNetworkData,
+                versions: {
+                    ...currentArtifact.versions,
+                    [this._versionName]: contractVersion,
                 },
             };
         } else {
             newArtifact = {
-                contract_name: contractName,
-                networks: {
-                    [this._networkId]: contractNetworkData,
+                schemaVersion: '2.0.0',
+                contractName,
+                versions: {
+                    [this._versionName]: contractVersion,
                 },
+                networks: {},
             };
         }
 

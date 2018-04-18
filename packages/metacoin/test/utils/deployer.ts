@@ -9,6 +9,7 @@ const deployerOpts = {
     provider: web3Wrapper.getProvider(),
     artifactsDir: config.artifactsDir,
     networkId: config.networkId,
+    versionName: config.versionName,
     defaults: {
         from: devConstants.TESTRPC_FIRST_ADDRESS,
     },

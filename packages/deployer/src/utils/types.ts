@@ -1,4 +1,5 @@
 import { ContractAbi, Provider, TxData } from '@0xproject/types';
+import * as solc from 'solc';
 import * as Web3 from 'web3';
 import * as yargs from 'yargs';
 
@@ -10,27 +11,46 @@ export enum AbiType {
 }
 
 export interface ContractArtifact {
-    contract_name: string;
+    schemaVersion: '2.0.0';
+    contractName: string;
     networks: ContractNetworks;
+    versions: ContractVersions;
+}
+
+export interface ContractVersions {
+    [versionName: string]: ContractVersion;
+}
+
+export interface ContractVersion {
+    compiler: {
+        name: 'solc';
+        version: string;
+        settings: solc.CompilerSettings;
+    };
+    sources: {
+        [sourceName: string]: {
+            id: number;
+        };
+    };
+    sourceTreeHashHex: string;
+    compilerOutput: solc.StandardContractOutput;
 }
 
 export interface ContractNetworks {
-    [key: number]: ContractNetworkData;
+    [networkId: number]: ContractNetworkData;
 }
 
 export interface ContractNetworkData {
-    solc_version: string;
-    optimizer_enabled: boolean;
-    source_tree_hash: string;
-    abi: ContractAbi;
-    bytecode: string;
-    runtime_bytecode: string;
-    address?: string;
-    constructor_args?: string;
-    updated_at: number;
-    source_map: string;
-    source_map_runtime: string;
-    sources: string[];
+    version: string;
+    address: string;
+    links: {
+        [linkName: string]: {
+            address: string;
+            version?: string;
+        };
+    };
+    transactionHash: string;
+    constructorArgs: string;
 }
 
 export interface SolcErrors {
@@ -42,7 +62,6 @@ export interface CliOptions extends yargs.Arguments {
     contractsDir: string;
     jsonrpcUrl: string;
     networkId: number;
-    shouldOptimize: boolean;
     gasPrice: string;
     account?: string;
     contract?: string;
@@ -51,15 +70,16 @@ export interface CliOptions extends yargs.Arguments {
 
 export interface CompilerOptions {
     contractsDir: string;
-    networkId: number;
-    optimizerEnabled: boolean;
     artifactsDir: string;
+    versionName: string;
+    compilerSettings?: solc.CompilerSettings;
     specifiedContracts: Set<string>;
 }
 
 export interface BaseDeployerOptions {
     artifactsDir: string;
     networkId: number;
+    versionName: string;
     defaults: Partial<TxData>;
 }
 

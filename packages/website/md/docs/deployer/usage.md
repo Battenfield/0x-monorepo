@@ -39,6 +39,7 @@ const deployerOpts = {
     artifactsDir: path.resolve('src', 'artifacts'),
     jsonrpcUrl: 'http://localhost:8545',
     networkId: 50,
+    versionName: 'development',
     defaults: {
         gas: 1000000,
     },

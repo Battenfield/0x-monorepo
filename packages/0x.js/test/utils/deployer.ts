@@ -10,6 +10,7 @@ const artifactsDir = path.resolve('test', 'artifacts');
 const deployerOpts = {
     artifactsDir,
     provider,
+    versionName: 'development',
     networkId: constants.TESTRPC_NETWORK_ID,
     defaults: {
         gas: devConstants.GAS_ESTIMATE,

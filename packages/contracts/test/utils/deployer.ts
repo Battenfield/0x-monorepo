@@ -8,6 +8,7 @@ import { web3 } from './web3_wrapper';
 
 const deployerOpts = {
     provider: web3.currentProvider,
+    versionName: 'development',
     artifactsDir: path.resolve('lib', 'src', 'artifacts'),
     networkId: constants.TESTRPC_NETWORK_ID,
     defaults: {

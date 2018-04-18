@@ -10,6 +10,7 @@ import { fsWrapper } from './utils/fs_wrapper';
 import {
     ContractArtifact,
     ContractNetworkData,
+    ContractVersion,
     DeployerOptions,
     ProviderDeployerOptions,
     UrlDeployerOptions,
@@ -27,6 +28,7 @@ export class Deployer {
     public web3Wrapper: Web3Wrapper;
     private _artifactsDir: string;
     private _networkId: number;
+    private _versionName: string;
     private _defaults: Partial<TxData>;
 
     /**
@@ -37,6 +39,7 @@ export class Deployer {
     constructor(opts: DeployerOptions) {
         this._artifactsDir = opts.artifactsDir;
         this._networkId = opts.networkId;
+        this._versionName = opts.versionName;
         this._defaults = opts.defaults;
         let provider: Provider;
         if (_.isUndefined((opts as ProviderDeployerOptions).provider)) {
@@ -58,10 +61,8 @@ export class Deployer {
      */
     public async deployAsync(contractName: string, args: any[] = []): Promise<Web3.ContractInstance> {
         const contractArtifactIfExists: ContractArtifact = this._loadContractArtifactIfExists(contractName);
-        const contractNetworkDataIfExists: ContractNetworkData = this._getContractNetworkDataFromArtifactIfExists(
-            contractArtifactIfExists,
-        );
-        const data = contractNetworkDataIfExists.bytecode;
+        const contractVersion: ContractVersion = this._getContractVersionFromArtifactIfExists(contractArtifactIfExists);
+        const data = contractVersion.compilerOutput.evm.bytecode.object;
         const from = await this._getFromAddressAsync();
         const gas = await this._getAllowableGasEstimateAsync(data);
         const txData = {
@@ -70,7 +71,7 @@ export class Deployer {
             data,
             gas,
         };
-        const abi = contractNetworkDataIfExists.abi;
+        const abi = contractVersion.compilerOutput.abi;
         const constructorAbi = _.find(abi, { type: AbiType.Constructor }) as ConstructorAbi;
         const constructorArgs = _.isUndefined(constructorAbi) ? [] : constructorAbi.inputs;
         if (constructorArgs.length !== args.length) {
@@ -138,21 +139,21 @@ export class Deployer {
         args: any[],
     ): Promise<void> {
         const contractArtifactIfExists: ContractArtifact = this._loadContractArtifactIfExists(contractName);
-        const contractNetworkDataIfExists: ContractNetworkData = this._getContractNetworkDataFromArtifactIfExists(
-            contractArtifactIfExists,
-        );
-        const abi = contractNetworkDataIfExists.abi;
+        const contractVersion = this._getContractVersionFromArtifactIfExists(contractArtifactIfExists);
+        const abi = contractVersion.compilerOutput.abi;
         const encodedConstructorArgs = encoder.encodeConstructorArgsFromAbi(args, abi);
-        const newContractData = {
-            ...contractNetworkDataIfExists,
+        const newContractData: ContractNetworkData = {
+            version: this._versionName,
             address: contractAddress,
-            constructor_args: encodedConstructorArgs,
+            links: {},
+            transactionHash: '0x',
+            constructorArgs: encodedConstructorArgs,
         };
         const newArtifact = {
             ...contractArtifactIfExists,
             networks: {
                 ...contractArtifactIfExists.networks,
-                [this._networkId]: newContractData,
+                [this._versionName]: newContractData,
             },
         };
         const artifactString = utils.stringifyWithFormatting(newArtifact);
@@ -174,16 +175,18 @@ export class Deployer {
         }
     }
     /**
-     * Gets data for current networkId stored in artifact.
+     * Gets data for current version stored in artifact.
      * @param contractArtifact The contract artifact.
-     * @return Network specific contract data.
+     * @return Version specific contract data.
      */
-    private _getContractNetworkDataFromArtifactIfExists(contractArtifact: ContractArtifact): ContractNetworkData {
-        const contractNetworkDataIfExists = contractArtifact.networks[this._networkId];
-        if (_.isUndefined(contractNetworkDataIfExists)) {
-            throw new Error(`Data not found in artifact for contract: ${contractArtifact.contract_name}`);
+    private _getContractVersionFromArtifactIfExists(contractArtifact: ContractArtifact): ContractVersion {
+        const contractVersionIfExists = contractArtifact.versions[this._versionName];
+        if (_.isUndefined(contractVersionIfExists)) {
+            throw new Error(
+                `Version ${this._versionName} not found in artifact for contract: ${contractArtifact.contractName}`,
+            );
         }
-        return contractNetworkDataIfExists;
+        return contractVersionIfExists;
     }
     /**
      * Gets the address to use for sending a transaction.

@@ -2,6 +2,7 @@ import * as path from 'path';
 
 export const config = {
     networkId: 50,
+    versionName: 'development',
     artifactsDir: path.resolve(__dirname, '../../artifacts'),
     contractsDir: path.resolve(__dirname, '../../contracts'),
     ganacheLogFile: 'ganache.log',
